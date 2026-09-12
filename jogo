@@ -1,565 +1,476 @@
 import pygame
-import math
 import sys
 import random
+import os
+import math
 
 pygame.init()
 pygame.font.init()
 
-# --- Configurações de Resolução Nativa e Escala ---
-BASE_WIDTH = 1280
-BASE_HEIGHT = 720
+LARGURA, ALTURA = 1000, 620
+TELA = pygame.display.set_mode((LARGURA, ALTURA))
+pygame.display.set_caption("Fuga do Zeca GIGANTE!")
+RELOGIO = pygame.time.Clock()
+FPS = 60
 
-# Proporção das 3 colunas
-LEFT_PANEL_W = 390
-RIGHT_PANEL_W = 410
-MID_PANEL_W = BASE_WIDTH - LEFT_PANEL_W - RIGHT_PANEL_W
+# Cores
+BRANCO = (255, 255, 255)
+PRETO = (20, 22, 28)
+ROXO_LORENA = (170, 75, 230)
+PELE = (245, 195, 160)
+CABELO_LORENA = (75, 42, 28)
+MADEIRA = (185, 115, 60)
+VERDE_TOPO = (75, 185, 95)
+TERRA = (90, 75, 65)
+AZUL_NOITE = (24, 28, 42)
+AMARELO_OURO = (255, 215, 0)
+VERMELHO_PERIGO = (235, 55, 55)
+AZUL_MOLA = (60, 160, 240)
 
-# Inicialização segura em Tela Cheia escalada
-is_fullscreen = True
-flags = pygame.FULLSCREEN | pygame.SCALED
-screen = pygame.display.set_mode((BASE_WIDTH, BASE_HEIGHT), flags)
-pygame.display.set_caption("Zeca Clicker")
-clock = pygame.time.Clock()
+FONTE_TITULO = pygame.font.SysFont("Arial", 46, bold=True)
+FONTE_MEDIA = pygame.font.SysFont("Arial", 22, bold=True)
+FONTE_PEQUENA = pygame.font.SysFont("Arial", 16, bold=True)
 
-# --- Fontes ---
-FONT_XS = pygame.font.SysFont("Arial", 12)
-FONT_SM = pygame.font.SysFont("Arial", 14, bold=True)
-FONT_MD = pygame.font.SysFont("Arial", 18, bold=True)
-FONT_LG = pygame.font.SysFont("Arial", 26, bold=True)
-FONT_TITLE = pygame.font.SysFont("Arial", 36, bold=True)
+GRAVIDADE = 0.68
 
-# --- Cores (Todas Definidas com Segurança) ---
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-GRAY = (149, 165, 166)
-GOLD = (241, 196, 15)
-GREEN = (39, 174, 96)
-RED = (231, 76, 60)
-PURPLE = (142, 68, 173)
-CYAN = (26, 188, 156)
-
-BOARD_DARK = (28, 46, 36)
-BOARD_FRAME = (120, 60, 20)
-MID_BG = (38, 54, 46)
-SIDEBAR_BG = (236, 240, 241)
-CARD_BG = (255, 255, 255)
-CARD_HOVER = (225, 232, 237)
-CARD_LOCKED = (189, 195, 199)
-TEXT_DARK = (44, 62, 80)
-TEXT_MUTED = (127, 140, 141)
-
-SKIN_COLOR = (245, 198, 165)
-SHIRT_COLOR = (52, 152, 219)
-TIE_COLOR = (192, 57, 43)
-
-UPGRADES_TEMPLATE = [
-    {
-        "id": "giz",
-        "name": "Giz Branco",
-        "desc": "Rabisco rápido no quadro verde",
-        "base_cost": 15,
-        "nps": 0.5,
-        "click_bonus": 0,
-        "icon": "giz"
-    },
-    {
-        "id": "cafe",
-        "name": "Café Morno",
-        "desc": "Energia da cantina pro Zeca",
-        "base_cost": 85,
-        "nps": 2.2,
-        "click_bonus": 1,
-        "icon": "cafe"
-    },
-    {
-        "id": "apagador",
-        "name": "Apagador Voador",
-        "desc": "Silencia a sala no susto",
-        "base_cost": 340,
-        "nps": 8.5,
-        "click_bonus": 0,
-        "icon": "apagador"
-    },
-    {
-        "id": "coxinha",
-        "name": "Coxinha Gordurosa",
-        "desc": "Combustível sagrado do recreio",
-        "base_cost": 1250,
-        "nps": 26.0,
-        "click_bonus": 3,
-        "icon": "coxinha"
-    },
-    {
-        "id": "monitor",
-        "name": "Monitor Caxias",
-        "desc": "Corrige exercícios com dedicação",
-        "base_cost": 5200,
-        "nps": 90.0,
-        "click_bonus": 0,
-        "icon": "monitor"
-    },
-    {
-        "id": "ar",
-        "name": "Ar no 16°C",
-        "desc": "Zeca leciona sem suar a camisa",
-        "base_cost": 22000,
-        "nps": 280.0,
-        "click_bonus": 10,
-        "icon": "ar"
-    },
-    {
-        "id": "reuniao",
-        "name": "Reunião de Pais",
-        "desc": "Cobrança que gera respeito total",
-        "base_cost": 90000,
-        "nps": 950.0,
-        "click_bonus": 30,
-        "icon": "reuniao"
-    }
-]
-
-
-class FloatingText:
-    def __init__(self, x, y, text, color=GOLD):
-        self.x = x + random.randint(-15, 15)
-        self.y = y + random.randint(-8, 8)
-        self.text = text
-        self.color = color
-        self.alpha = 255
-        self.lifetime = 45
-
-    def update(self):
-        self.y -= 1.3
-        self.lifetime -= 1
-        self.alpha = max(0, int((self.lifetime / 45) * 255))
-
-    def draw(self, surface):
-        if self.lifetime > 0:
-            rendered = FONT_MD.render(self.text, True, self.color)
-            surf = rendered.copy()
-            surf.set_alpha(self.alpha)
-            surface.blit(surf, (self.x, self.y))
-
-
-def draw_professor_zeca(surface, center_x, center_y, scale=1.0):
-    w = int(250 * scale)
-    h = int(290 * scale)
-    z_surf = pygame.Surface((w, h), pygame.SRCALPHA)
-    cx, cy = w // 2, h // 2
-
-    # Barriga
-    belly_rect = pygame.Rect(cx - int(75 * scale), cy - int(25 * scale), int(150 * scale), int(126 * scale))
-    pygame.draw.ellipse(z_surf, SHIRT_COLOR, belly_rect)
-    pygame.draw.ellipse(z_surf, (41, 128, 185), belly_rect, int(3 * scale))
-
-    # Gravata
-    tie_pts = [
-        (cx, cy - int(10 * scale)),
-        (cx - int(14 * scale), cy + int(45 * scale)),
-        (cx, cy + int(72 * scale)),
-        (cx + int(14 * scale), cy + int(45 * scale))
-    ]
-    pygame.draw.polygon(z_surf, TIE_COLOR, tie_pts)
-
-    # Braços
-    pygame.draw.circle(z_surf, SHIRT_COLOR, (cx - int(75 * scale), cy + int(18 * scale)), int(25 * scale))
-    pygame.draw.circle(z_surf, SHIRT_COLOR, (cx + int(75 * scale), cy + int(18 * scale)), int(25 * scale))
-    pygame.draw.circle(z_surf, SKIN_COLOR, (cx - int(82 * scale), cy + int(40 * scale)), int(15 * scale))
-    pygame.draw.circle(z_surf, SKIN_COLOR, (cx + int(82 * scale), cy + int(40 * scale)), int(15 * scale))
-
-    # Giz
-    giz_rect = pygame.Rect(cx + int(86 * scale), cy + int(32 * scale), int(8 * scale), int(20 * scale))
-    pygame.draw.rect(z_surf, (245, 245, 245), giz_rect)
-
-    # Rosto e papada
-    pygame.draw.circle(z_surf, SKIN_COLOR, (cx, cy - int(46 * scale)), int(46 * scale))
-    pygame.draw.ellipse(z_surf, (230, 180, 150), (cx - int(36 * scale), cy - int(23 * scale), int(72 * scale), int(28 * scale)))
-
-    # Cabelo
-    pygame.draw.arc(z_surf, (85, 45, 20), (cx - int(52 * scale), cy - int(82 * scale), int(104 * scale), int(70 * scale)), 0.2, 2.9, int(8 * scale))
-
-    # Óculos
-    gl_left = (cx - int(19 * scale), cy - int(49 * scale))
-    gl_right = (cx + int(19 * scale), cy - int(49 * scale))
-    r_lens = int(14 * scale)
-    pygame.draw.circle(z_surf, (255, 255, 255, 180), gl_left, r_lens)
-    pygame.draw.circle(z_surf, (255, 255, 255, 180), gl_right, r_lens)
-    pygame.draw.circle(z_surf, BLACK, gl_left, r_lens, int(3 * scale))
-    pygame.draw.circle(z_surf, BLACK, gl_right, r_lens, int(3 * scale))
-    pygame.draw.line(z_surf, BLACK, (gl_left[0] + r_lens, gl_left[1]), (gl_right[0] - r_lens, gl_right[1]), int(3 * scale))
-
-    # Olhos e bigode
-    pygame.draw.circle(z_surf, (30, 30, 30), gl_left, int(4 * scale))
-    pygame.draw.circle(z_surf, (30, 30, 30), gl_right, int(4 * scale))
-    pygame.draw.ellipse(z_surf, (70, 40, 15), (cx - int(23 * scale), cy - int(33 * scale), int(46 * scale), int(16 * scale)))
-
-    # Crachá
-    badge_rect = pygame.Rect(cx - int(64 * scale), cy - int(8 * scale), int(34 * scale), int(20 * scale))
-    pygame.draw.rect(z_surf, WHITE, badge_rect, border_radius=int(3 * scale))
-    badge_txt = FONT_XS.render("ZECA", True, BLACK)
-    z_surf.blit(badge_txt, (badge_rect.x + int(4 * scale), badge_rect.y + int(3 * scale)))
-
-    surface.blit(z_surf, (center_x - cx, center_y - cy))
-
-
-def draw_visual_item(surface, icon_type, x, y, anim_tick):
-    if icon_type == "giz":
-        colors = [(240, 240, 240), (241, 196, 15), (52, 152, 219), (231, 76, 60)]
-        c = colors[(x // 25) % len(colors)]
-        pygame.draw.rect(surface, c, (x, y + 4, 8, 24), border_radius=2)
-        pygame.draw.rect(surface, (50, 50, 50), (x, y + 4, 8, 24), 1, border_radius=2)
-
-    elif icon_type == "cafe":
-        pygame.draw.rect(surface, (236, 240, 241), (x, y + 6, 20, 18), border_radius=3)
-        pygame.draw.arc(surface, (236, 240, 241), (x + 12, y + 8, 10, 12), -1.5, 1.5, 3)
-        smoke_offset = math.sin((anim_tick + x) * 0.1) * 3
-        pygame.draw.circle(surface, (200, 200, 200), (int(x + 10 + smoke_offset), y + 2), 3)
-
-    elif icon_type == "apagador":
-        float_y = y + math.sin((anim_tick + x * 2) * 0.08) * 3
-        pygame.draw.rect(surface, (160, 82, 45), (x, float_y + 4, 26, 7), border_radius=2)
-        pygame.draw.rect(surface, (50, 50, 50), (x, float_y + 11, 26, 7), border_radius=2)
-
-    elif icon_type == "coxinha":
-        pts = [(x + 11, y + 2), (x + 2, y + 22), (x + 20, y + 22)]
-        pygame.draw.polygon(surface, (230, 126, 34), pts)
-        pygame.draw.circle(surface, (211, 84, 0), (x + 11, y + 21), 9)
-
-    elif icon_type == "monitor":
-        pygame.draw.circle(surface, (245, 205, 170), (x + 13, y + 10), 10)
-        pygame.draw.rect(surface, (39, 174, 96), (x + 5, y + 18, 16, 11), border_radius=3)
-        pygame.draw.rect(surface, (30, 30, 30), (x + 7, y + 8, 4, 4), 1)
-        pygame.draw.rect(surface, (30, 30, 30), (x + 14, y + 8, 4, 4), 1)
-
-    elif icon_type == "ar":
-        pygame.draw.rect(surface, (245, 245, 245), (x, y + 3, 30, 16), border_radius=3)
-        pygame.draw.rect(surface, (180, 180, 180), (x, y + 3, 30, 16), 1, border_radius=3)
-        wind_x = x + 5 + (anim_tick % 12)
-        pygame.draw.line(surface, CYAN, (wind_x, y + 21), (wind_x + 6, y + 21), 2)
-
-    elif icon_type == "reuniao":
-        pygame.draw.circle(surface, (231, 76, 60), (x + 7, y + 9), 6)
-        pygame.draw.circle(surface, (52, 152, 219), (x + 21, y + 9), 6)
-        pygame.draw.rect(surface, (140, 40, 40), (x + 2, y + 15, 10, 12), border_radius=3)
-        pygame.draw.rect(surface, (30, 90, 140), (x + 16, y + 15, 10, 12), border_radius=3)
-
-
-def format_num(n):
-    if n >= 1_000_000_000:
-        return f"{n / 1_000_000_000:.2f}B"
-    if n >= 1_000_000:
-        return f"{n / 1_000_000:.2f}M"
-    if n >= 1_000:
-        return f"{n / 1_000:.1f}k"
-    return f"{int(n)}"
-
-
-def calculate_claimable_diplomas(lifetime_points, current_diplomas):
-    if lifetime_points < 25000:
-        return 0
-    total_earned = int(math.floor(math.sqrt(lifetime_points / 25000)))
-    return max(0, total_earned - current_diplomas)
-
-
-def switch_screen_mode(go_fullscreen):
-    global screen, is_fullscreen
-    is_fullscreen = go_fullscreen
-    curr_flags = (pygame.FULLSCREEN | pygame.SCALED) if is_fullscreen else pygame.SCALED
+def carregar_foto_zeca(tam):
+    # Aceita zeca.png ou zeca.jpg
+    caminho = "zeca.png" if os.path.exists("zeca.png") else ("zeca.jpg" if os.path.exists("zeca.jpg") else None)
+    if not caminho:
+        return None
     try:
-        screen = pygame.display.set_mode((BASE_WIDTH, BASE_HEIGHT), curr_flags)
+        img = pygame.image.load(caminho).convert_alpha()
+        img = pygame.transform.smoothscale(img, (tam, tam))
+        mascara = pygame.Surface((tam, tam), pygame.SRCALPHA)
+        pygame.draw.circle(mascara, (255, 255, 255), (tam // 2, tam // 2), tam // 2)
+        saida = pygame.Surface((tam, tam), pygame.SRCALPHA)
+        saida.blit(img, (0, 0))
+        saida.blit(mascara, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+        return saida
     except Exception:
-        pass
+        return None
+
+FOTO_ZECA_GIGANTE = carregar_foto_zeca(110)
+
+
+class ParticulaPasso:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.vx = random.uniform(-4, 4)
+        self.vy = random.uniform(-6, -2)
+        self.vida = 25
+
+    def atualizar(self):
+        self.x += self.vx
+        self.y += self.vy
+        self.vy += 0.3
+        self.vida -= 1
+
+    def desenhar(self, tela, cam_x):
+        if self.vida > 0:
+            pygame.draw.circle(tela, (140, 130, 120), (int(self.x - cam_x), int(self.y)), max(1, self.vida // 5))
+
+
+class ReguaGigante:
+    def __init__(self, x, y, vel_x, rotativa=False):
+        self.x = float(x)
+        self.y = float(y)
+        self.vel_x = vel_x
+        self.rotativa = rotativa
+        self.angulo = 0
+        self.rect = pygame.Rect(int(x), int(y), 65, 16)
+        self.ativo = True
+
+    def atualizar(self):
+        self.x += self.vel_x
+        if self.rotativa:
+            self.angulo += 8
+            self.y += math.sin(self.angulo * 0.05) * 2
+        self.rect.x = int(self.x)
+        self.rect.y = int(self.y)
+
+        if self.rect.right < -200:
+            self.ativo = False
+
+    def desenhar(self, tela, cam_x):
+        rx = self.rect.x - cam_x
+        ry = self.rect.y
+        base = pygame.Surface((65, 16), pygame.SRCALPHA)
+        pygame.draw.rect(base, MADEIRA, (0, 0, 65, 16), border_radius=4)
+        for i in range(8, 65, 10):
+            pygame.draw.line(base, PRETO, (i, 0), (i, 7), 2)
+
+        if self.rotativa:
+            rot = pygame.transform.rotate(base, self.angulo)
+            tela.blit(rot, (rx - rot.get_width() // 2 + 32, ry - rot.get_height() // 2 + 8))
+        else:
+            tela.blit(base, (rx, ry))
+
+
+class Plataforma:
+    def __init__(self, x, y, largura, tipo="normal"):
+        self.rect = pygame.Rect(x, y, largura, 40)
+        self.tipo = tipo  # 'normal', 'vertical_movel', 'horizontal_movel'
+        self.y_inicial = y
+        self.x_inicial = x
+        self.tempo_movimento = random.uniform(0, 10)
+        
+        # Elementos extras na plataforma
+        self.tem_mola = random.random() < 0.28 and largura > 180 and tipo == "normal"
+        self.mola_rect = pygame.Rect(x + largura // 2 - 16, y - 12, 32, 12) if self.tem_mola else None
+        
+        self.tem_caderno = random.random() < 0.35 and not self.tem_mola
+        self.caderno_rect = pygame.Rect(x + largura // 2 - 12, y - 28, 24, 20) if self.tem_caderno else None
+        self.caderno_coletado = False
+
+    def atualizar(self):
+        self.tempo_movimento += 0.04
+        if self.tipo == "vertical_movel":
+            self.rect.y = int(self.y_inicial + math.sin(self.tempo_movimento) * 55)
+        elif self.tipo == "horizontal_movel":
+            self.rect.x = int(self.x_inicial + math.cos(self.tempo_movimento) * 70)
+
+        if self.tem_mola:
+            self.mola_rect.x = self.rect.x + self.rect.width // 2 - 16
+            self.mola_rect.y = self.rect.y - 12
+
+        if self.tem_caderno and not self.caderno_coletado:
+            self.caderno_rect.x = self.rect.x + self.rect.width // 2 - 12
+            self.caderno_rect.y = self.rect.y - 28 + int(math.sin(self.tempo_movimento * 2) * 4)
+
+    def desenhar(self, tela, cam_x):
+        rx = self.rect.x - cam_x
+        ry = self.rect.y
+        w, h = self.rect.width, self.rect.height
+
+        # Bloco de terra / base
+        pygame.draw.rect(tela, TERRA, (rx, ry, w, h), border_bottom_left_radius=6, border_bottom_right_radius=6)
+        # Topo de grama
+        pygame.draw.rect(tela, VERDE_TOPO, (rx, ry, w, 10), border_top_left_radius=6, border_top_right_radius=6)
+        # Detalhes de textura (tijolos/pedras)
+        for i in range(15, w - 15, 45):
+            pygame.draw.rect(tela, (65, 52, 45), (rx + i, ry + 16, 24, 8), border_radius=2)
+
+        # Mola / Trampolim
+        if self.tem_mola:
+            mx = self.mola_rect.x - cam_x
+            my = self.mola_rect.y
+            pygame.draw.rect(tela, PRETO, (mx - 2, my + 8, 36, 4))
+            pygame.draw.rect(tela, AZUL_MOLA, (mx, my, 32, 8), border_radius=3)
+            pygame.draw.line(tela, BRANCO, (mx + 4, my + 4), (mx + 28, my + 4), 2)
+
+        # Caderno Colecionável
+        if self.tem_caderno and not self.caderno_coletado:
+            cx = self.caderno_rect.x - cam_x
+            cy = self.caderno_rect.y
+            pygame.draw.rect(tela, AMARELO_OURO, (cx, cy, 24, 20), border_radius=3)
+            pygame.draw.rect(tela, BRANCO, (cx + 3, cy + 3, 18, 14))
+            pygame.draw.line(tela, PRETO, (cx + 6, cy + 8), (cx + 18, cy + 8), 2)
+            pygame.draw.line(tela, PRETO, (cx + 6, cy + 12), (cx + 15, cy + 12), 2)
+
+
+class Lorena:
+    def __init__(self, x, y):
+        self.rect = pygame.Rect(x, y, 34, 62)
+        self.vel_x = 0
+        self.vel_y = 0
+        self.no_chao = False
+        self.pulos_restantes = 2
+
+    def pular(self, forca=-14.2):
+        self.vel_y = forca
+        self.pulos_restantes -= 1
+        self.no_chao = False
+
+    def atualizar(self, plataformas):
+        teclas = pygame.key.get_pressed()
+        
+        vel_base = 5.6
+        if teclas[pygame.K_LEFT] or teclas[pygame.K_a]:
+            self.vel_x = -3.2
+        elif teclas[pygame.K_RIGHT] or teclas[pygame.K_d]:
+            self.vel_x = 3.8
+        else:
+            self.vel_x = 0
+
+        self.vel_y += GRAVIDADE
+        self.rect.x += int(vel_base + self.vel_x)
+        self.rect.y += int(self.vel_y)
+
+        self.no_chao = False
+        for plat in plataformas:
+            # Pouso na plataforma
+            if (self.vel_y >= 0 and
+                self.rect.bottom >= plat.rect.top and
+                self.rect.bottom <= plat.rect.top + 20 and
+                self.rect.right > plat.rect.left and
+                self.rect.left < plat.rect.right):
+                self.rect.bottom = plat.rect.top
+                self.vel_y = 0
+                self.no_chao = True
+                self.pulos_restantes = 2
+
+                # Se a plataforma for móvel horizontalmente, leva o jogador junto
+                if plat.tipo == "horizontal_movel":
+                    self.rect.x += int(math.cos(plat.tempo_movimento) * 1.5)
+
+            # Acionou a mola/trampolim
+            if plat.tem_mola and self.rect.colliderect(plat.mola_rect) and self.vel_y >= 0:
+                self.pular(forca=-19.5)  # Super pulo!
+
+    def desenhar(self, tela, cam_x):
+        rx = self.rect.x - cam_x
+        ry = self.rect.y
+
+        # Corpo / Roupa roxa
+        pygame.draw.rect(tela, ROXO_LORENA, (rx + 4, ry + 24, 26, 38), border_radius=6)
+        # Cabeça
+        pygame.draw.circle(tela, PELE, (rx + 17, ry + 13), 13)
+        # Cabelo comprido castanho
+        pygame.draw.circle(tela, CABELO_LORENA, (rx + 17, ry + 9), 14)
+        pygame.draw.rect(tela, CABELO_LORENA, (rx + 4, ry + 12, 10, 28), border_radius=4)
+        # Mochila vermelha
+        pygame.draw.rect(tela, (230, 80, 60), (rx - 3, ry + 26, 8, 22), border_radius=3)
+        # Olho
+        pygame.draw.circle(tela, PRETO, (rx + 22, ry + 14), 2)
+
+
+class ZecaTitã:
+    def __init__(self, x, y):
+        self.x = float(x)
+        self.y = float(y)
+        # Dimensões GIGANTES
+        self.largura = 150
+        self.altura = 230
+        self.cooldown_ataque = 120
+        self.passo_timer = 0
+
+    def atualizar(self, lorena_x, lorena_y, reguas, particulas):
+        distancia = lorena_x - self.x
+        velocidade = 5.1 + (distancia * 0.0028)
+        self.x += velocidade
+
+        # O Zeca corre pesado, acompanhando a altura
+        self.y += (lorena_y - self.y - 100) * 0.05
+        self.passo_timer += 1
+
+        # Tremores e partículas a cada pisada do Titã
+        screen_shake = 0
+        if self.passo_timer % 32 == 0:
+            screen_shake = 7
+            for _ in range(5):
+                particulas.append(ParticulaPasso(self.x + self.largura - 20, self.y + self.altura))
+
+        # Padrão de ataque com réguas
+        self.cooldown_ataque -= 1
+        if self.cooldown_ataque <= 0:
+            self.cooldown_ataque = random.randint(110, 170)
+            tipo_rotativa = random.random() < 0.45
+            altura_tiro = self.y + 40 if tipo_rotativa else self.y + 110
+            reguas.append(ReguaGigante(self.x + self.largura + 10, altura_tiro, 12.5, rotativa=tipo_rotativa))
+
+        return screen_shake
+
+    def get_rect(self):
+        return pygame.Rect(int(self.x), int(self.y), self.largura, self.altura)
+
+    def desenhar(self, tela, cam_x):
+        rx = int(self.x - cam_x)
+        ry = int(self.y)
+
+        # Corpo colossal
+        pygame.draw.rect(tela, (225, 225, 235), (rx, ry + 80, self.largura, self.altura - 80), border_radius=16)
+        # Faixa / cinto preto do Zeca
+        pygame.draw.rect(tela, PRETO, (rx + 8, ry + 155, self.largura - 16, 16))
+        # Braço enorme segurando régua de metro
+        pygame.draw.rect(tela, PELE, (rx + self.largura - 20, ry + 100, 36, 75), border_radius=10)
+        pygame.draw.rect(tela, MADEIRA, (rx + self.largura + 10, ry + 60, 18, 140), border_radius=4)
+
+        # Cabeça: Foto do Zeca Gigante ou Caricatura Procedural
+        centro_x = rx + self.largura // 2 - 10
+        if FOTO_ZECA_GIGANTE:
+            tela.blit(FOTO_ZECA_GIGANTE, (centro_x - 55, ry - 35))
+        else:
+            pygame.draw.circle(tela, PELE, (centro_x, ry + 35), 45)
+            # Óculos escuros gigantes
+            pygame.draw.rect(tela, PRETO, (centro_x - 30, ry + 18, 60, 22), border_radius=4)
+            # Barba/cavanhaque
+            pygame.draw.arc(tela, (40, 28, 22), (centro_x - 25, ry + 35, 50, 35), 3.14, 0, 7)
+
+
+def gerar_plataforma_elaborada(ultima_plat):
+    distancia = random.randint(110, 210)
+    largura = random.randint(180, 400)
+    
+    variacao_y = random.choice([-80, -45, 0, 45, 75])
+    novo_y = max(240, min(ALTURA - 95, ultima_plat.rect.y + variacao_y))
+    novo_x = ultima_plat.rect.right + distancia
+
+    # Sorteia tipo de mecânica
+    chance = random.random()
+    if chance < 0.20:
+        tipo = "vertical_movel"
+    elif chance < 0.40:
+        tipo = "horizontal_movel"
+    else:
+        tipo = "normal"
+
+    return Plataforma(novo_x, novo_y, largura, tipo)
 
 
 def main():
-    global screen, is_fullscreen
+    lorena = Lorena(280, 340)
+    zeca_gigante = ZecaTitã(-80, 220)
 
-    points = 0.0
-    lifetime_points = 0.0
-    diplomas = 0
-    click_power_base = 1.0
-    nps_base = 0.0
+    # Plataformas iniciais
+    plataformas = [
+        Plataforma(0, 450, 600, "normal"),
+        Plataforma(690, 420, 320, "vertical_movel"),
+        Plataforma(1100, 370, 350, "normal"),
+    ]
 
-    upgrades = []
-    def reset_upgrades():
-        upgrades.clear()
-        for u in UPGRADES_TEMPLATE:
-            item = u.copy()
-            item["count"] = 0
-            item["cost"] = item["base_cost"]
-            upgrades.append(item)
+    reguas = []
+    particulas = []
+    pontuacao = 0
+    cadernos_coletados = 0
+    game_over = False
+    motivo = ""
+    shake_restante = 0
 
-    reset_upgrades()
+    rodando = True
+    while rodando:
+        RELOGIO.tick(FPS)
 
-    floating_texts = []
-    zeca_cx = LEFT_PANEL_W // 2
-    zeca_cy = BASE_HEIGHT // 2 + 30
-    target_scale = 1.0
-    current_scale = 1.0
+        for evento in pygame.event.get():
+            if evento.type == pygame.QUIT:
+                rodando = False
+            elif evento.type == pygame.KEYDOWN:
+                if not game_over:
+                    if evento.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w):
+                        if lorena.pulos_restantes > 0:
+                            lorena.pular()
+                else:
+                    if evento.key == pygame.K_r:
+                        main()
+                        return
 
-    store_scroll_y = 0
-    mid_scroll_y = 0
-    anim_tick = 0
+        if not game_over:
+            lorena.atualizar(plataformas)
+            tremor = zeca_gigante.atualizar(lorena.rect.x, lorena.rect.y, reguas, particulas)
+            if tremor > 0:
+                shake_restante = tremor
 
-    input_modal_active = False
-    input_text = ""
+            # Atualiza plataformas móveis e colecionáveis
+            for p in plataformas:
+                p.atualizar()
+                if p.tem_caderno and not p.caderno_coletado and lorena.rect.colliderect(p.caderno_rect):
+                    p.caderno_coletado = True
+                    cadernos_coletados += 1
 
-    running = True
-    while running:
-        dt = clock.tick(60) / 1000.0
-        anim_tick += 1
+            # Câmera centrada na Lorena
+            cam_x = lorena.rect.x - 240
 
-        prestige_multiplier = 1.0 + (diplomas * 0.10)
-        current_nps = nps_base * prestige_multiplier
-        current_click = click_power_base * prestige_multiplier
+            # Geração procedural
+            while plataformas[-1].rect.right - cam_x < LARGURA + 500:
+                plataformas.append(gerar_plataforma_elaborada(plataformas[-1]))
 
-        if current_nps > 0:
-            gained = current_nps * dt
-            points += gained
-            lifetime_points += gained
+            plataformas = [p for p in plataformas if p.rect.right - cam_x > -300]
 
-        current_scale += (target_scale - current_scale) * 0.25
-        if target_scale != 1.0 and abs(current_scale - target_scale) < 0.02:
-            target_scale = 1.0
+            # Atualiza réguas e partículas
+            for r in reguas[:]:
+                r.atualizar()
+                if not r.ativo:
+                    reguas.remove(r)
+                elif r.rect.colliderect(lorena.rect):
+                    game_over = True
+                    motivo = "Atingida em cheio pela régua do Zeca Gigante!"
 
-        claimable = calculate_claimable_diplomas(lifetime_points, diplomas)
-        mouse_pos = pygame.mouse.get_pos()
+            for part in particulas[:]:
+                part.atualizar()
+                if part.vida <= 0:
+                    particulas.remove(part)
 
-        # --- Tratamento de Eventos ---
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
+            pontuacao = int((lorena.rect.x - 280) / 10) + (cadernos_coletados * 100)
 
-            elif event.type == pygame.KEYDOWN:
-                # 1. Se o modal secreto estiver aberto
-                if input_modal_active:
-                    if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                        if input_text.isdigit():
-                            new_val = float(input_text)
-                            diff = new_val - points
-                            points = new_val
-                            if diff > 0:
-                                lifetime_points += diff
-                        input_modal_active = False
-                        input_text = ""
-                    elif event.key == pygame.K_ESCAPE:
-                        input_modal_active = False
-                        input_text = ""
-                    elif event.key == pygame.K_BACKSPACE:
-                        input_text = input_text[:-1]
-                    elif event.unicode.isdigit() and len(input_text) < 14:
-                        input_text += event.unicode
-                    continue
+            # Colisão direta com o Titã
+            if zeca_gigante.x + zeca_gigante.largura >= lorena.rect.left + 5:
+                game_over = True
+                motivo = "O Titã Zeca te engoliu na prova de recuperação!"
 
-                # 2. Tecla F11 (Alternar Tela Cheia com segurança)
-                if event.key == pygame.K_F11:
-                    switch_screen_mode(not is_fullscreen)
-
-                # 3. Tecla ESC (Sair da tela cheia ou fechar)
-                elif event.key == pygame.K_ESCAPE:
-                    if is_fullscreen:
-                        switch_screen_mode(False)
-                    else:
-                        running = False
-
-                # 4. Tecla 6 (Abre o campo numérico)
-                elif event.key in (pygame.K_6, pygame.K_KP6):
-                    input_modal_active = True
-                    input_text = str(int(points))
-
-            elif event.type == pygame.MOUSEWHEEL and not input_modal_active:
-                mx, my = mouse_pos
-                if LEFT_PANEL_W <= mx < LEFT_PANEL_W + MID_PANEL_W:
-                    mid_scroll_y = max(min(0, mid_scroll_y + event.y * 28), -250)
-                elif mx >= LEFT_PANEL_W + MID_PANEL_W:
-                    store_scroll_y = max(min(0, store_scroll_y + event.y * 28), -280)
-
-            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and not input_modal_active:
-                mx, my = event.pos
-
-                # Clique no Zeca
-                if mx < LEFT_PANEL_W:
-                    dist = math.hypot(mx - zeca_cx, my - zeca_cy)
-                    if dist <= 130:
-                        points += current_click
-                        lifetime_points += current_click
-                        target_scale = 0.88
-                        floating_texts.append(FloatingText(mx, my, f"+{int(current_click)} Nota"))
-
-                # Botão de Formatura
-                prestige_btn = pygame.Rect(LEFT_PANEL_W + 15, 12, MID_PANEL_W - 30, 52)
-                if prestige_btn.collidepoint(mx, my) and claimable > 0:
-                    diplomas += claimable
-                    points = 0.0
-                    click_power_base = 1.0
-                    nps_base = 0.0
-                    reset_upgrades()
-                    floating_texts.append(FloatingText(mx, my, f"Formatura! +{claimable} Diplomas!", PURPLE))
-
-                # Loja de Upgrades
-                if mx >= LEFT_PANEL_W + MID_PANEL_W:
-                    item_y = 75 + store_scroll_y
-                    for up in upgrades:
-                        btn_rect = pygame.Rect(LEFT_PANEL_W + MID_PANEL_W + 15, item_y, RIGHT_PANEL_W - 30, 68)
-                        if btn_rect.collidepoint(mx, my):
-                            if points >= up["cost"]:
-                                points -= up["cost"]
-                                up["count"] += 1
-                                nps_base += up["nps"]
-                                click_power_base += up["click_bonus"]
-                                up["cost"] = int(up["cost"] * 1.15)
-                                floating_texts.append(FloatingText(mx - 80, my, "Comprado!", GREEN))
-                        item_y += 75
-
-        for ft in floating_texts:
-            ft.update()
-        floating_texts = [ft for ft in floating_texts if ft.lifetime > 0]
-
-        # ==========================================
-        # RENDERIZAÇÃO
-        # ==========================================
-
-        # PAINEL 1: ZECA E SALA DE AULA
-        p1_rect = pygame.Rect(0, 0, LEFT_PANEL_W, BASE_HEIGHT)
-        pygame.draw.rect(screen, BOARD_DARK, p1_rect)
-        pygame.draw.rect(screen, BOARD_FRAME, p1_rect, 8)
-
-        pts_txt = FONT_TITLE.render(f"{format_num(points)} Notas", True, GOLD)
-        nps_txt = FONT_MD.render(f"{current_nps:.1f} notas/seg", True, (210, 230, 220))
-        clk_txt = FONT_SM.render(f"+{int(current_click)} por clique", True, (170, 200, 190))
-
-        screen.blit(pts_txt, (LEFT_PANEL_W // 2 - pts_txt.get_width() // 2, 45))
-        screen.blit(nps_txt, (LEFT_PANEL_W // 2 - nps_txt.get_width() // 2, 90))
-        screen.blit(clk_txt, (LEFT_PANEL_W // 2 - clk_txt.get_width() // 2, 116))
-
-        draw_professor_zeca(screen, zeca_cx, zeca_cy, scale=current_scale)
-
-        hint = FONT_SM.render("Clique no Prof. Zeca!", True, (160, 190, 180))
-        screen.blit(hint, (LEFT_PANEL_W // 2 - hint.get_width() // 2, BASE_HEIGHT - 38))
-
-        # PAINEL 2: MURAL VISUAL DA ESCOLA
-        p2_rect = pygame.Rect(LEFT_PANEL_W, 0, MID_PANEL_W, BASE_HEIGHT)
-        pygame.draw.rect(screen, MID_BG, p2_rect)
-        pygame.draw.line(screen, (20, 30, 25), (LEFT_PANEL_W, 0), (LEFT_PANEL_W, BASE_HEIGHT), 2)
-        pygame.draw.line(screen, (20, 30, 25), (LEFT_PANEL_W + MID_PANEL_W, 0), (LEFT_PANEL_W + MID_PANEL_W, BASE_HEIGHT), 2)
-
-        prestige_btn = pygame.Rect(LEFT_PANEL_W + 15, 12, MID_PANEL_W - 30, 52)
-        if claimable > 0:
-            pygame.draw.rect(screen, PURPLE, prestige_btn, border_radius=8)
-            p_title = FONT_MD.render(f"🎓 FORMATURA! (+{claimable} Diplomas)", True, WHITE)
-            p_sub = FONT_XS.render(f"Resetar por +{claimable * 10}% permanente", True, (240, 220, 255))
+            if lorena.rect.top > ALTURA + 60:
+                game_over = True
+                motivo = "Você caiu no abismo!"
         else:
-            pygame.draw.rect(screen, (50, 68, 60), prestige_btn, border_radius=8)
-            p_title = FONT_MD.render("🎓 FORMATURA (Bloqueado)", True, (160, 180, 170))
-            needed = max(0, 25000 - int(lifetime_points))
-            p_sub = FONT_XS.render(f"Faltam {format_num(needed)} notas para novo diploma", True, (130, 150, 140))
+            cam_x = lorena.rect.x - 240
 
-        screen.blit(p_title, (prestige_btn.x + 12, prestige_btn.y + 8))
-        screen.blit(p_sub, (prestige_btn.x + 12, prestige_btn.y + 30))
+        # Aplica Screen Shake
+        offset_y = random.randint(-shake_restante, shake_restante) if shake_restante > 0 else 0
+        if shake_restante > 0:
+            shake_restante -= 1
 
-        dip_txt = FONT_SM.render(f"Diplomas: {diplomas} (Bônus: +{int((prestige_multiplier - 1.0) * 100)}%)", True, GOLD)
-        screen.blit(dip_txt, (LEFT_PANEL_W + 20, 72))
+        # --- Renderização ---
+        superficie_render = pygame.Surface((LARGURA, ALTURA))
+        superficie_render.fill(AZUL_NOITE)
 
-        row_y = 100 + mid_scroll_y
-        for up in upgrades:
-            row_rect = pygame.Rect(LEFT_PANEL_W + 10, row_y, MID_PANEL_W - 20, 74)
-            pygame.draw.rect(screen, (32, 46, 38), row_rect, border_radius=6)
+        # Fundo: réguas e equações em parallax
+        for i in range(-1, 9):
+            bx = int((i * 240) - (cam_x * 0.15) % 240)
+            pygame.draw.line(superficie_render, (38, 44, 65), (bx, 0), (bx, ALTURA), 2)
 
-            row_header = FONT_SM.render(f"{up['name']} ({up['count']})", True, (220, 235, 225))
-            screen.blit(row_header, (row_rect.x + 12, row_rect.y + 6))
+        # Desenho das plataformas elaboradas
+        for plat in plataformas:
+            plat.desenhar(superficie_render, cam_x)
 
-            if up["count"] == 0:
-                empty_lbl = FONT_XS.render("Nenhum adquirido ainda...", True, (100, 125, 115))
-                screen.blit(empty_lbl, (row_rect.x + 14, row_rect.y + 36))
-            else:
-                max_visible = 11
-                items_to_draw = min(up["count"], max_visible)
-                item_x = row_rect.x + 14
-                for i in range(items_to_draw):
-                    draw_visual_item(screen, up["icon"], item_x, row_rect.y + 30, anim_tick)
-                    item_x += 36
+        # Partículas
+        for part in particulas:
+            part.desenhar(superficie_render, cam_x)
 
-                if up["count"] > max_visible:
-                    more_lbl = FONT_SM.render(f"+{up['count'] - max_visible}", True, GOLD)
-                    screen.blit(more_lbl, (row_rect.right - 42, row_rect.y + 36))
+        # Projéteis
+        for r in reguas:
+            r.desenhar(superficie_render, cam_x)
 
-            row_y += 80
+        # Titã e Lorena
+        zeca_gigante.desenhar(superficie_render, cam_x)
+        lorena.desenhar(superficie_render, cam_x)
 
-        # PAINEL 3: SECRETARIA E LOJA
-        p3_rect = pygame.Rect(LEFT_PANEL_W + MID_PANEL_W, 0, RIGHT_PANEL_W, BASE_HEIGHT)
-        pygame.draw.rect(screen, SIDEBAR_BG, p3_rect)
+        # Blit na tela principal com o efeito de tremor
+        TELA.blit(superficie_render, (0, offset_y))
 
-        store_title_surf = pygame.Surface((RIGHT_PANEL_W, 60))
-        store_title_surf.fill((225, 230, 235))
-        st_title = FONT_LG.render("Secretaria & Cantina", True, TEXT_DARK)
-        store_title_surf.blit(st_title, (16, 16))
-        screen.blit(store_title_surf, (LEFT_PANEL_W + MID_PANEL_W, 0))
+        # --- HUD Superior ---
+        pygame.draw.rect(TELA, (15, 18, 25), (0, 0, LARGURA, 54))
+        distancia_zeca = max(0, int((lorena.rect.x - (zeca_gigante.x + zeca_gigante.largura)) / 10))
 
-        card_y = 70 + store_scroll_y
-        for up in upgrades:
-            card_rect = pygame.Rect(LEFT_PANEL_W + MID_PANEL_W + 15, card_y, RIGHT_PANEL_W - 30, 68)
-            can_buy = points >= up["cost"]
-            is_hover = card_rect.collidepoint(mouse_pos)
+        txt_pontos = FONTE_MEDIA.render(f"Distância: {pontuacao}m", True, AMARELO_OURO)
+        txt_cadernos = FONTE_PEQUENA.render(f"Cadernos (+100m): {cadernos_coletados}", True, (240, 240, 255))
+        txt_alerta = FONTE_PEQUENA.render(f"DISTÂNCIA DO TITÃ: {distancia_zeca}m", True, VERMELHO_PERIGO if distancia_zeca < 20 else BRANCO)
+        txt_pulos = FONTE_PEQUENA.render(f"Pulos: {lorena.pulos_restantes}/2", True, BRANCO)
 
-            bg = CARD_HOVER if (can_buy and is_hover) else (CARD_BG if can_buy else CARD_LOCKED)
-            pygame.draw.rect(screen, bg, card_rect, border_radius=8)
+        TELA.blit(txt_pontos, (25, 14))
+        TELA.blit(txt_cadernos, (240, 17))
+        TELA.blit(txt_alerta, (520, 17))
+        TELA.blit(txt_pulos, (LARGURA - 130, 17))
 
-            name_lbl = FONT_MD.render(up["name"], True, TEXT_DARK if can_buy else TEXT_MUTED)
-            desc_lbl = FONT_XS.render(up["desc"], True, TEXT_MUTED)
-            screen.blit(name_lbl, (card_rect.x + 10, card_rect.y + 8))
-            screen.blit(desc_lbl, (card_rect.x + 10, card_rect.y + 30))
+        # Tela de Fim de Jogo
+        if game_over:
+            sombra = pygame.Surface((LARGURA, ALTURA), pygame.SRCALPHA)
+            sombra.fill((0, 0, 0, 185))
+            TELA.blit(sombra, (0, 0))
 
-            stats_str = ""
-            if up["nps"] > 0:
-                stats_str += f"+{up['nps'] * prestige_multiplier:.1f}/s "
-            if up["click_bonus"] > 0:
-                stats_str += f"+{int(up['click_bonus'] * prestige_multiplier)} clique"
-            stats_lbl = FONT_SM.render(stats_str, True, GREEN if can_buy else TEXT_MUTED)
-            screen.blit(stats_lbl, (card_rect.x + 10, card_rect.y + 46))
+            t1 = FONTE_TITULO.render("RECUPERAÇÃO ETERNA!", True, VERMELHO_PERIGO)
+            t2 = FONTE_MEDIA.render(motivo, True, BRANCO)
+            t3 = FONTE_MEDIA.render(f"Pontuação Máxima: {pontuacao}m", True, AMARELO_OURO)
+            t4 = FONTE_PEQUENA.render("Pressione [R] para reiniciar a fuga", True, BRANCO)
 
-            cost_lbl = FONT_MD.render(f"{format_num(up['cost'])} 🪙", True, (180, 130, 20) if can_buy else RED)
-            screen.blit(cost_lbl, (card_rect.right - cost_lbl.get_width() - 10, card_rect.y + 10))
-
-            count_lbl = FONT_LG.render(str(up["count"]), True, (160, 175, 185))
-            screen.blit(count_lbl, (card_rect.right - count_lbl.get_width() - 12, card_rect.y + 34))
-
-            card_y += 74
-
-        for ft in floating_texts:
-            ft.draw(screen)
-
-        # Modal da Tecla 6
-        if input_modal_active:
-            overlay = pygame.Surface((BASE_WIDTH, BASE_HEIGHT), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 160))
-            screen.blit(overlay, (0, 0))
-
-            box_w, box_h = 360, 130
-            box_rect = pygame.Rect(BASE_WIDTH // 2 - box_w // 2, BASE_HEIGHT // 2 - box_h // 2, box_w, box_h)
-            pygame.draw.rect(screen, (34, 47, 62), box_rect, border_radius=8)
-
-            t_val = FONT_SM.render("Definir Total de Notas:", True, WHITE)
-            screen.blit(t_val, (box_rect.x + 20, box_rect.y + 18))
-
-            field_rect = pygame.Rect(box_rect.x + 20, box_rect.y + 45, box_w - 40, 36)
-            pygame.draw.rect(screen, (20, 28, 38), field_rect, border_radius=5)
-
-            display_input = (input_text if input_text else "0") + ("|" if (anim_tick // 25) % 2 == 0 else "")
-            val_txt = FONT_MD.render(display_input, True, GOLD)
-            screen.blit(val_txt, (field_rect.x + 10, field_rect.y + 7))
-
-            sub_hint = FONT_XS.render("[Enter] Confirmar  |  [Esc] Fechar", True, (150, 165, 175))
-            screen.blit(sub_hint, (box_rect.x + 20, box_rect.y + 96))
+            TELA.blit(t1, (LARGURA // 2 - t1.get_width() // 2, 160))
+            TELA.blit(t2, (LARGURA // 2 - t2.get_width() // 2, 235))
+            TELA.blit(t3, (LARGURA // 2 - t3.get_width() // 2, 285))
+            TELA.blit(t4, (LARGURA // 2 - t4.get_width() // 2, 345))
 
         pygame.display.flip()
 
     pygame.quit()
-    try:
-        sys.exit(0)
-    except SystemExit:
-        pass
-
+    sys.exit()
 
 if __name__ == "__main__":
     main()
